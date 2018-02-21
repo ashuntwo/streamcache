@@ -151,19 +151,24 @@ func (sce *StreamCacheEntry) GetMetadata() (map[interface{}]interface{}, error) 
 }
 
 func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
-	sce.lock.Lock()
 	metadata, err := reader.GetMetadata()
+
+	sce.lock.Lock()
+
 	if err != nil {
 		sce.status = status_error
 		sce.error = err
-		return
+	} else {
+		sce.metadata = metadata
+		sce.status = status_metadata_read
 	}
-
-	sce.metadata = metadata
-	sce.status = status_metadata_read
 
 	sce.cond.Broadcast()
 	sce.lock.Unlock()
+
+	if err != nil {
+		return
+	}
 
 	buf := make([]byte, 4096)
 	for !isTerminalState(sce.status) {
