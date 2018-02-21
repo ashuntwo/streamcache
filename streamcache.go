@@ -60,7 +60,7 @@ func (sce *StreamCacheEntry) Copy(dst io.Writer) (int64, error) {
 	}
 
 	cnt, err := io.Copy(dst, reader)
-	glog.Errorf("copying returned %v %v", cnt, err)
+	glog.Infof("copying returned %v %v", cnt, err)
 	return cnt, err
 }
 
@@ -109,7 +109,7 @@ func (scr *SCEReader) Read(p []byte) (int, error) {
 	for {
 		switch {
 		case scr.status == status_complete:
-			glog.Errorf("reached EOF with nextOffset %d", scr.nextOffset)
+			glog.Infof("reached EOF with nextOffset %d", scr.nextOffset)
 			return 0, io.EOF
 		case scr.status == status_error:
 			return 0, scr.sce.error
@@ -117,10 +117,10 @@ func (scr *SCEReader) Read(p []byte) (int, error) {
 			count := min(len(p), len(scr.sce.buffer) - scr.nextOffset)
 			copied := copy(p, scr.sce.buffer[scr.nextOffset:scr.nextOffset+count])
 			scr.nextOffset += copied
-			glog.Errorf("cache read: copied %d bytes to p with len %d. nextOffset now %d", copied, len(p), scr.nextOffset)
+			glog.Infof("cache read: copied %d bytes to p with len %d. nextOffset now %d", copied, len(p), scr.nextOffset)
 			return copied, nil
 		case scr.sce.status == status_complete:
-			glog.Errorf("reached EOF with nextOffset %d", scr.nextOffset)
+			glog.Infof("reached EOF with nextOffset %d", scr.nextOffset)
 			scr.status = status_complete
 			return 0, io.EOF
 		case scr.sce.status == status_error:
@@ -173,7 +173,7 @@ func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 
 		if read > 0 {
 			nextBuf := append(sce.buffer, buf[0:read]...)
-			glog.Errorf("cache: appended %d bytes to buffer len %d resulting in len %d", read, len(sce.buffer), len(nextBuf))
+			glog.Infof("cache: appended %d bytes to buffer len %d resulting in len %d", read, len(sce.buffer), len(nextBuf))
 			sce.buffer = nextBuf
 		}
 
