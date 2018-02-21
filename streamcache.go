@@ -134,6 +134,22 @@ func (scr *SCEReader) Read(p []byte) (int, error) {
 	}
 }
 
+func (sce *StreamCacheEntry) GetMetadata() (map[interface{}]interface{}, error) {
+	sce.lock.RLock()
+	defer sce.lock.RUnlock()
+
+	for {
+		switch {
+		case sce.status < status_metadata_read:
+			sce.cond.Wait()
+		case sce.status == status_error:
+			return sce.metadata, sce.error
+		default:
+			return sce.metadata, nil
+		}
+	}
+}
+
 func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 	sce.lock.Lock()
 	metadata, err := reader.GetMetadata()
