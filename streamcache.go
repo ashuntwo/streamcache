@@ -188,6 +188,10 @@ func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 		sce.cond.Broadcast()
 		sce.lock.Unlock()
 	}
+
+	if closer, ok := reader.(io.Closer) ; ok {
+		closer.Close()
+	}
 }
 
 func isTerminalState(st status) bool {
