@@ -1,4 +1,4 @@
-package streamcache
+package stats
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestStreamCache(t *testing.T) {
+func TestStats(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "StreamCache Suite")
+	RunSpecs(t, "Stats Suite")
 }
