@@ -32,7 +32,7 @@ func (crw *CountingResponseWriter) Write(b []byte) (int, error) {
 	if crw.bytesWritten == 0 && len(b) != 0 {
 		crw.firstByteTime = time.Now()
 		glog.Errorf("first byte written")
-		if flusher := crw.writer.(http.Flusher) ; flusher != nil {
+		if flusher, ok := crw.writer.(http.Flusher) ; ok {
 			glog.Errorf("flushing")
 			flusher.Flush()
 		}
