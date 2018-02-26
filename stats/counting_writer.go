@@ -28,7 +28,7 @@ func (crw *CountingResponseWriter) WriteHeader(status int) {
 
 func (crw *CountingResponseWriter) Write(b []byte) (int, error) {
 	bytesWritten, error := crw.writer.Write(b)
-	glog.Errorf("writing %v %v", crw.bytesWritten, len(b))
+	//glog.Infof("writing %v %v", crw.bytesWritten, len(b))
 	if crw.bytesWritten == 0 && len(b) != 0 {
 		crw.firstByteTime = time.Now()
 		glog.Errorf("first byte written")
