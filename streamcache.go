@@ -7,6 +7,7 @@ import (
 	"context"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/golang/glog"
+	"sync/atomic"
 )
 
 type ReaderWithMetadata interface {
@@ -14,7 +15,7 @@ type ReaderWithMetadata interface {
 	io.Reader
 }
 
-type status int
+type status int32
 
 const (
 	status_inprogress status = iota
@@ -25,7 +26,10 @@ const (
 
 const INITIAL_SIZE = 50000
 
+var nextEntryId int32
+
 type StreamCacheEntry struct {
+	id int32
 	metadata map[interface{}]interface{}
 	status status
 	error error
@@ -60,7 +64,7 @@ func (sce *StreamCacheEntry) Copy(dst io.Writer) (int64, error) {
 	}
 
 	cnt, err := io.Copy(dst, reader)
-	glog.Infof("copying returned %v %v", cnt, err)
+	glog.Infof("%v: copying returned %v %v", sce.id, cnt, err)
 	return cnt, err
 }
 
@@ -84,6 +88,7 @@ func (sc *StreamCache) Get(key interface{}) *StreamCacheEntry {
 func (sc *StreamCache) Put(key interface{}, reader ReaderWithMetadata, ctx context.Context) *StreamCacheEntry {
 	lock := &sync.RWMutex{}
 	sce := &StreamCacheEntry{
+		id: atomic.AddInt32(&nextEntryId, int32(1)),
 		lock: lock,
 		cond: sync.NewCond(lock.RLocker()),
 		buffer: make([]byte, 0, INITIAL_SIZE),
@@ -109,7 +114,7 @@ func (scr *SCEReader) Read(p []byte) (int, error) {
 	for {
 		switch {
 		case scr.status == status_complete:
-			glog.Infof("reached EOF with nextOffset %d", scr.nextOffset)
+			glog.Infof("%v: reached EOF with nextOffset %d", scr.sce.id, scr.nextOffset)
 			return 0, io.EOF
 		case scr.status == status_error:
 			return 0, scr.sce.error
@@ -117,10 +122,10 @@ func (scr *SCEReader) Read(p []byte) (int, error) {
 			count := min(len(p), len(scr.sce.buffer) - scr.nextOffset)
 			copied := copy(p, scr.sce.buffer[scr.nextOffset:scr.nextOffset+count])
 			scr.nextOffset += copied
-			glog.Infof("cache read: copied %d bytes to p with len %d. nextOffset now %d", copied, len(p), scr.nextOffset)
+			glog.Infof("%v: cache read: copied %d bytes to p with len %d. nextOffset now %d", scr.sce.id, copied, len(p), scr.nextOffset)
 			return copied, nil
 		case scr.sce.status == status_complete:
-			glog.Infof("reached EOF with nextOffset %d", scr.nextOffset)
+			glog.Infof("%v: reached EOF with nextOffset %d %d", scr.sce.id, scr.nextOffset, len(scr.sce.buffer))
 			scr.status = status_complete
 			return 0, io.EOF
 		case scr.sce.status == status_error:
@@ -170,6 +175,7 @@ func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 		return
 	}
 
+	byteCount := 0
 	buf := make([]byte, 4096)
 	for !isTerminalState(sce.status) {
 		read, err := reader.Read(buf)
@@ -177,8 +183,9 @@ func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 		sce.lock.Lock()
 
 		if read > 0 {
+			byteCount += read
 			nextBuf := append(sce.buffer, buf[0:read]...)
-			glog.Infof("cache: appended %d bytes to buffer len %d resulting in len %d", read, len(sce.buffer), len(nextBuf))
+			glog.Infof("%v: cache: appended %d bytes to buffer len %d resulting in len %d", sce.id, read, len(sce.buffer), len(nextBuf))
 			sce.buffer = nextBuf
 		}
 
@@ -195,8 +202,11 @@ func (sce *StreamCacheEntry) cache(reader ReaderWithMetadata) {
 	}
 
 	if closer, ok := reader.(io.Closer) ; ok {
+		glog.Infof("%v: closing", sce.id)
 		closer.Close()
 	}
+
+	glog.Infof("%v: cache: cached %v bytes. buf is now %v", sce.id, byteCount, len(sce.buffer))
 }
 
 func isTerminalState(st status) bool {
